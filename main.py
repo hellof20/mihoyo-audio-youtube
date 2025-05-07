@@ -8,13 +8,14 @@ import yt_dlp
 import concurrent.futures
 import threading
 
-def get_youtube_videos(relevance_language="RU", max_results=100):
+def get_youtube_videos(relevance_language="RU", max_results=100, search_query=""):
     """
     获取YouTube视频ID列表
     
     Args:
         relevance_language (str): 视频语言，默认为'RU'
         max_results (int): 需要获取的视频数量，默认为100
+        search_query (str): 搜索关键词
         
     Returns:
         list: 视频ID列表，如果发生错误则返回空列表
@@ -34,24 +35,6 @@ def get_youtube_videos(relevance_language="RU", max_results=100):
 
         videos = []
         next_page_token = None
-
-        # 添加语言相关的搜索词来增加获取指定语言视频的概率
-        language_keywords = {
-            "DE": "lustige videos OR viral deutschland OR tiktok deutschland OR deutsche trends OR alltag deutschland OR deutsche memes",
-            "EN": "funny moments OR epic fails OR life hacks OR viral videos OR daily vlog OR trending US OR british humor",
-            "FR": "vidéos drôles OR insolite OR humour français OR tendances france OR vie quotidienne france OR blagues françaises",
-            "ID": "video lucu OR prank indonesia OR viral indonesia OR konten kreator OR kehidupan sehari-hari OR cerita lucu",
-            "IT": "video divertenti OR momenti divertenti OR virali italia OR vita quotidiana OR scherzi italiani OR trend italia",
-            "JA": "面白い動画 OR バイラル OR ドッキリ OR 日常風景 OR 爆笑動画 OR トレンド動画 OR 人気動画",
-            "KO": "웃긴영상 OR 예능 OR 유머 OR 바이럴 OR 일상 브이로그 OR 코미디 OR 트렌드",
-            "PT": "vídeos engraçados OR pegadinhas OR viral brasil OR dia a dia OR humor brasileiro OR trends brasil",
-            "RU": "смешные видео OR приколы OR вайны OR тренды OR повседневная жизнь OR юмор OR развлечения",
-            "TH": "คลิปตลก OR ไวรัล OR ความบันเทิง OR ฮาๆ OR ชีวิตประจำวัน OR เรื่องฮาๆ OR ติ๊กต็อก",
-            "TR": "komik videolar OR viral türkiye OR eğlenceli anlar OR günlük yaşam OR türk mizah OR trend videolar",
-            "VI": "video hài hước OR hài việt nam OR clip vui OR viral OR cuộc sống hàng ngày OR giải trí OR xu hướng"
-        }
-        
-        search_query = language_keywords.get(relevance_language, "")
         
         while len(videos) < max_results:
             request = youtube.search().list(
@@ -103,7 +86,7 @@ def download_youtube_video(video_id, relevance_language="RU"):
     ydl_opts = {
         'format': 'bestaudio/best',  # 下载最佳音频质量
         'outtmpl': os.path.join(output_dir, f'%(title)s-{video_id}.%(ext)s'),
-        'socket_timeout': 30,
+        'socket_timeout': 15,
         'retries': 1,
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
@@ -137,7 +120,7 @@ def read_parameters():
     从 input.csv 文件中读取多组参数
     
     Returns:
-        list: [(relevance_language, audio_num), ...]，包含多组参数的列表
+        list: [(relevance_language, audio_num, search_query), ...]，包含多组参数的列表
     """
     try:
         parameters = []
@@ -147,31 +130,33 @@ def read_parameters():
                 try:
                     lang = row.get('relevance_language', 'RU')
                     num = int(row.get('audio_num', 120))
-                    parameters.append((lang, num))
+                    # 读取搜索关键词，如果没有提供则使用空字符串
+                    keywords = row.get('search_keywords', '')
+                    parameters.append((lang, num, keywords))
                 except (ValueError, KeyError) as e:
                     print(f"跳过无效的参数行: {row}, 错误: {e}")
                     continue
         
         if not parameters:  # 如果没有读取到有效参数，使用默认值
             print("未读取到有效参数，使用默认参数值")
-            return [('RU', 10)]
+            return [('RU', 10, '')]
         
         return parameters
         
     except (FileNotFoundError, csv.Error) as e:
         print(f"读取参数文件时发生错误: {e}")
         print("使用默认参数值")
-        return [('RU', 10)]
+        return [('RU', 10, '')]
 
 def process_parameter_set(params):
     """
     处理单个参数组合
     
     Args:
-        params (tuple): (relevance_language, audio_num) 参数组合
+        params (tuple): (relevance_language, audio_num, search_query) 参数组合
     """
-    relevance_language, audio_num = params
-    print(f"\n处理参数组合: 语言={relevance_language}, 数量={audio_num}")
+    relevance_language, audio_num, search_query = params
+    print(f"\n处理参数组合: 语言={relevance_language}, 数量={audio_num}, 关键词={search_query}")
     
     # 使用线程锁确保打印输出不会混乱
     print_lock = threading.Lock()
@@ -181,7 +166,11 @@ def process_parameter_set(params):
             print(*args, **kwargs)
     
     # 使用函数获取视频列表
-    video_ids = get_youtube_videos(relevance_language=relevance_language, max_results=audio_num)
+    video_ids = get_youtube_videos(
+        relevance_language=relevance_language, 
+        max_results=audio_num,
+        search_query=search_query
+    )
     safe_print(f"获取到 {len(video_ids)} 个视频ID")
     safe_print("视频ID列表:", video_ids)
 

@@ -1,5 +1,4 @@
-relevance_language,audio_num
-DE,40
-TH,40
-TR,30
-VI,50
+relevance_language,audio_num,search_keywords
+RU,5,"смешные видео OR приколы OR вайны OR тренды"
+EN,5,"funny moments OR epic fails OR life hacks"
+zh-Hans,5,"习近平"
